@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Branch;
+use App\Cost;
 use App\Department;
 use App\Requisition;
 use App\Stock;
@@ -22,7 +23,6 @@ class RequisitionController extends Controller
         $requisition =  Requisition::where('status','pending')->get();
         $requisition->makeHidden(['created_at','updated_at']);
         return $requisition;
-
     }
 
     /**
@@ -130,6 +130,26 @@ class RequisitionController extends Controller
     {
         $datas = Stock::selectRaw('code as kodi,max(price) as price')
             ->groupby('kodi');
+        if($request->category=='everything')
+        {
+            return $joins = DB::table('requisitions')
+                ->where([['department',$request->department],
+                    ['status','dispatched']
+                ])
+                ->whereBetween('date', [$request->start,$request->end])
+                ->joinSub($datas, 'datas', function($join){
+                    $join->on('requisitions.code', '=', 'datas.kodi');
+                })->get();
+        }
+        if($request->category=='everything' && $request->department=='all')
+        {
+            return $joins = DB::table('requisitions')
+                ->where('status','==','dispatched')
+                ->whereBetween('date', [$request->start,$request->end])
+                ->joinSub($datas, 'datas', function($join){
+                    $join->on('requisitions.code', '=', 'datas.kodi');
+                })->get();
+        }
        return $joins = DB::table('requisitions')
            ->where([['department',$request->department],
                    ['name',$request->category],
@@ -201,7 +221,17 @@ class RequisitionController extends Controller
                 ->get();
             foreach ($req as $reqs)
             {
+                $all_price = Stock::where(['code'=> $reqs['code']])->first();
+                $price = $all_price['price'];
                 $quantity = $reqs['quantity'];
+                $costing = $price*$quantity;
+                $column1 = $reqs['name'];
+                $arr = explode(' ',trim($column1));
+                $value =  $arr[0];
+                Cost::create([
+                    'department' =>$value,
+                    $value => $costing
+                ]);
                 $date = $reqs['date'];
                 $reqs ->update(['status'=> 'dispatched']);
                     $p_descrs = StockDetail::where('code',$reqs['code'])->get();
@@ -228,5 +258,12 @@ class RequisitionController extends Controller
     public function departReport(Request $request)
     {
         return Requisition::where(['department'=>$request->department])->get();
+    }
+
+    public function masterReport(Request $request){
+        return Cost::selectRaw('department,sum(Commercial) as Commercial, sum(Computer) as Computer, sum(Groceries) as Groceries, sum(Motor) as Motor, sum(Printed) as Printed, sum(Transport) as Transport')
+            ->whereBetween('created_at', [$request->start,$request->end])
+            ->groupby('department')
+            ->get();
     }
 }

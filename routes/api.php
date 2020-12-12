@@ -53,7 +53,12 @@ Route::group([
     Route::get('cats', 'ExpenditureController@categories');
 //    Expenditure
 
+//    reports start
     Route::get('vanhu', 'AuthController@allStaff');
     Route::post('departmental', 'RequisitionController@departReport');
+    Route::post('master', 'RequisitionController@masterReport');
+//    reports end
+
+
 
 });
